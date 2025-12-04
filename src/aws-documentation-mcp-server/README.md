@@ -8,6 +8,7 @@ This MCP server provides tools to access AWS documentation, search for content, 
 
 - **Read Documentation**: Fetch and convert AWS documentation pages to markdown format
 - **Search Documentation**: Search AWS documentation using the official search API (global only)
+- **Read Sections**: Fetches sections of AWS documentation page and converts it to markdown format.
 - **Recommendations**: Get content recommendations for AWS documentation pages (global only)
 - **Get Available Services List**: Get a list of available AWS services in China regions (China only)
 
@@ -172,6 +173,14 @@ Searches AWS documentation using the official AWS Documentation Search API.
 
 ```python
 search_documentation(search_phrase: str, limit: int) -> list[dict]
+```
+
+### read_section (global only)
+
+Fetches sections of AWS documentation page and converts it to markdown format.
+
+```python
+read_sections(url: str, section: list[str]) -> list[dict]
 ```
 
 ### recommend (global only)

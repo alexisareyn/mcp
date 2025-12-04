@@ -17,6 +17,13 @@ from pydantic import BaseModel
 from typing import Optional
 
 
+class SectionSummary(BaseModel):
+    """Details for a section on an AWS documentation page."""
+
+    section_title: str
+    section_summary: str
+
+
 class SearchResult(BaseModel):
     """Search result from AWS documentation search."""
 
@@ -25,6 +32,7 @@ class SearchResult(BaseModel):
     title: str
     query_id: str
     context: Optional[str] = None
+    sections: Optional[list[SectionSummary]] = None
 
 
 class RecommendationResult(BaseModel):

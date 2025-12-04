@@ -191,6 +191,73 @@ def format_documentation_result(url: str, content: str, start_index: int, max_le
     return result
 
 
+def extract_sections_from_markdown(markdown_content: str, section_titles: List[str]) -> str:
+    """Extract specific sections from markdown content based on section titles.
+
+    Args:
+        markdown_content: Full markdown content to extract sections from
+        section_titles: List of section titles to extract
+
+    Returns:
+        Filtered markdown content containing only the requested sections
+    """
+    if not markdown_content or not section_titles:
+        return '<e>No content or section titles provided</e>'
+
+    try:
+        lines = markdown_content.split('\n')
+        result_lines = []
+        found_sections = []
+        missing_sections = []
+        current_section_level = 0
+        capturing = False
+
+        normalized_titles = {title.strip().lower(): title.strip() for title in section_titles}
+
+        for line in lines:
+            if line.strip().startswith('#'):
+                heading_match = line.strip()
+                heading_level = len(heading_match) - len(heading_match.lstrip('#'))
+                heading_text = heading_match.lstrip('#').strip()
+
+                if heading_text.lower() in normalized_titles:
+                    current_section_level = heading_level
+                    capturing = True
+                    result_lines.append(line)
+
+                    original_title = normalized_titles[heading_text.lower()]
+                    if original_title not in found_sections:
+                        found_sections.append(original_title)
+
+                elif capturing and heading_level <= current_section_level:
+                    capturing = False
+                elif capturing:
+                    result_lines.append(line)
+            elif capturing:
+                result_lines.append(line)
+
+        for title in section_titles:
+            if title.strip() not in found_sections:
+                missing_sections.append(title.strip())
+
+        if not found_sections:
+            section_list = ', '.join(f'"{title}"' for title in section_titles)
+            return f'> **Note**: No sections found matching: {section_list}. Returning full document content instead.\n\n{markdown_content}'
+
+        result_content = '\n'.join(result_lines)
+
+        if missing_sections:
+            missing_list = ', '.join(f'"{title}"' for title in missing_sections)
+            result_content += (
+                f'\n\n> **Note**: The following requested sections were not found: {missing_list}'
+            )
+
+        return result_content
+
+    except Exception as e:
+        return f'<e>Error extracting sections: {str(e)}</e>'
+
+
 def parse_recommendation_results(data: Dict[str, Any]) -> List[RecommendationResult]:
     """Parse recommendation API response into RecommendationResult objects.
 

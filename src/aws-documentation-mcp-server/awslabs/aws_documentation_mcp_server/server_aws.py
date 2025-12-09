@@ -23,11 +23,13 @@ from awslabs.aws_documentation_mcp_server.models import (
     RecommendationResult,
     SearchResponse,
     SearchResult,
+    SectionSummary,
 )
 from awslabs.aws_documentation_mcp_server.server_utils import (
     DEFAULT_USER_AGENT,
     add_search_result_cache_item,
     read_documentation_impl,
+    read_sections_impl,
 )
 
 # Import utility functions
@@ -76,6 +78,7 @@ mcp = FastMCP(
 
     - Use `search_documentation` when: You need to find documentation about a specific AWS service or feature
     - Use `read_documentation` when: You have a specific documentation URL and need its content
+    - Use `read_sections` when: You have a specific documentation URL and specific section title(s) and only need content from those specific section(s)
     - Use `recommend` when: You want to find related content to a documentation page you're already viewing or need to find newly released information
     - Use `recommend` as a fallback when: Multiple searches have not yielded the specific information needed
     """,
@@ -159,6 +162,78 @@ async def read_documentation(
         raise ValueError('URL must end with .html')
 
     return await read_documentation_impl(ctx, url_str, max_length, start_index, SESSION_UUID)
+
+
+@mcp.tool()
+async def read_sections(
+    ctx: Context,
+    url: str = Field(description='URL of the AWS documentation page to read'),
+    section_titles: List[str] = Field(
+        description='List of section titles to extract from the documentation'
+    ),
+) -> str:
+    """Extract specific sections from an AWS documentation page based on section titles.
+
+    ## Usage
+
+    This tool retrieves an AWS documentation page, converts it to markdown, and returns only
+    the sections matching the provided section titles. This is useful when you need specific
+    parts of a document rather than the entire content.
+
+    ## URL Requirements
+
+    - Must be from the docs.aws.amazon.com domain
+    - Must end with .html
+
+    ## Section Matching
+
+    - Section titles are matched case-insensitively
+    - Leading and trailing whitespace is ignored
+    - When a section is found, all content until the next same-level or higher-level heading is included
+    - Subsections within matching sections are automatically included
+
+    ## Error Handling
+
+    - If no sections are found, an error message is returned
+    - If some sections are found but others are missing, the found sections are returned with a note about missing ones
+    - This allows for graceful partial success when requesting multiple sections
+
+    ## Example Usage
+
+    ```
+    read_sections(
+        url='https://docs.aws.amazon.com/s3/latest/userguide/bucketnamingrules.html',
+        section_titles=['Rules for bucket naming', 'Examples of valid bucket names'],
+    )
+    ```
+
+    Args:
+        ctx: MCP context for logging and error handling
+        url: URL of the AWS documentation page to read
+        section_titles: List of section titles to extract
+
+    Returns:
+        Filtered markdown content containing only the requested sections
+    """
+    # Validate that URL is from docs.aws.amazon.com and ends with .html
+    url_str = str(url)
+
+    supported_domains_regex = [r'^https?://docs\.aws\.amazon\.com/']
+    for modifier in SEARCH_TERM_DOMAIN_MODIFIERS:
+        supported_domains_regex.append(modifier['regex'])
+
+    if not any(re.match(domain_regex, url_str) for domain_regex in supported_domains_regex):
+        await ctx.error(f'Invalid URL: {url_str}. URL must be from list of supported domains')
+        raise ValueError('URL must be from list of supported domains')
+    if not url_str.endswith('.html'):
+        await ctx.error(f'Invalid URL: {url_str}. URL must end with .html')
+        raise ValueError('URL must end with .html')
+
+    if not section_titles:
+        await ctx.error('section_titles parameter cannot be empty')
+        raise ValueError('section_titles parameter cannot be empty')
+
+    return await read_sections_impl(ctx, url_str, section_titles, SESSION_UUID)
 
 
 @mcp.tool()
@@ -277,7 +352,11 @@ async def search_documentation(
             logger.error(error_msg)
             await ctx.error(error_msg)
             return SearchResponse(
-                search_results=[SearchResult(rank_order=1, url='', title=error_msg, context=None)],
+                search_results=[
+                    SearchResult(
+                        rank_order=1, url='', title=error_msg, context=None, sections=None
+                    )
+                ],
                 facets=None,
                 query_id='',
             )
@@ -301,7 +380,11 @@ async def search_documentation(
             logger.error(error_msg)
             await ctx.error(error_msg)
             return SearchResponse(
-                search_results=[SearchResult(rank_order=1, url='', title=error_msg, context=None)],
+                search_results=[
+                    SearchResult(
+                        rank_order=1, url='', title=error_msg, context=None, sections=None
+                    )
+                ],
                 facets=None,
                 query_id='',
             )
@@ -325,12 +408,74 @@ async def search_documentation(
                 elif 'suggestionBody' in text_suggestion:
                     context = text_suggestion['suggestionBody']
 
+                section_summaries = []
+                title = text_suggestion.get('title', 'Unknown')
+                url = text_suggestion.get('link', '')
+
+                logger.debug(
+                    f'Processing sections for {title}: {url} with metadata fields: {metadata}'
+                )
+
+                if 'section_summaries' in metadata:
+                    try:
+                        sections_data = metadata['section_summaries']
+                        if isinstance(sections_data, list):
+                            logger.debug(
+                                f'Found sections array for: {title}: {url}, length: {len(sections_data)}'
+                            )
+                            for section_idx, section in enumerate(sections_data):
+                                logger.debug(
+                                    f'Processing section {section_idx} for {title}: {url}, {section}'
+                                )
+                                section_title = section.get('section_title')
+                                section_summary = section.get('section_summary')
+                                logger.debug(
+                                    f"Extracted title: '{section_title}', summary: '{section_summary}' for {title}: {url}"
+                                )
+
+                                if section_title and section_summary:
+                                    logger.debug(
+                                        f'Adding section to results for {title}: {url}, {section_title}'
+                                    )
+                                    section_summaries.append(
+                                        SectionSummary(
+                                            section_title=section_title,
+                                            section_summary=section_summary,
+                                        )
+                                    )
+                                else:
+                                    logger.debug(
+                                        f'Skipping section {section_idx} for {title}: {url} - missing title or summary'
+                                    )
+                        else:
+                            logger.debug(
+                                f'Sections data is not a list for {title}: {url}, type: {type(sections_data)}'
+                            )
+
+                    except json.JSONDecodeError as e:
+                        logger.debug(
+                            f'JSON decode error for {url} : {title}: {e} with Raw sections that failed to parse: {metadata["section_summaries"]}'
+                        )
+                    except (TypeError, KeyError) as e:
+                        logger.debug(f'Type/Key error for {title}: {url}, {e}')
+                else:
+                    logger.debug(f'No section_summaries in metadata for {title}: {url}')
+
+                if section_summaries:
+                    logger.info(
+                        f'Found {len(section_summaries)} sections for {title}: {url}, {[s.section_title for s in section_summaries]}'
+                    )
+
+                if not section_summaries:
+                    logger.debug(f'No sections found for {title}: {url}.')
+
                 results.append(
                     SearchResult(
                         rank_order=i + 1,
                         url=text_suggestion.get('link', ''),
                         title=text_suggestion.get('title', ''),
                         context=context,
+                        sections=section_summaries,
                     )
                 )
 

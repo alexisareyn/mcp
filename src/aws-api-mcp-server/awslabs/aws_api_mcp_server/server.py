@@ -19,6 +19,7 @@ from .core.aws.driver import translate_cli_to_ir
 from .core.aws.service import (
     check_security_policy,
     execute_awscli_customization,
+    get_help_document,
     interpret_command,
     request_consent,
     validate,
@@ -66,10 +67,6 @@ logger.add(log_file, rotation='10 MB', retention='7 days')
 
 server = FastMCP(
     name='AWS-API-MCP',
-    log_level=FASTMCP_LOG_LEVEL,
-    host=HOST,
-    port=PORT,
-    stateless_http=STATELESS_HTTP,
     middleware=[HTTPHeaderValidationMiddleware()] if TRANSPORT == 'streamable-http' else [],
 )
 READ_OPERATIONS_INDEX: Optional[ReadOnlyOperations] = None
@@ -288,6 +285,9 @@ async def call_aws_helper(
             elif REQUIRE_MUTATION_CONSENT:
                 await request_consent(cli_command, ctx)
 
+        if ir.command and ir.command.is_help_operation:
+            return await get_help_document(cli_command, ctx)
+
         if ir.command and ir.command.is_awscli_customization:
             return execute_awscli_customization(
                 cli_command,
@@ -395,7 +395,17 @@ def main():
         logger.warning('Failed to load read operations index: {}', e)
         READ_OPERATIONS_INDEX = None
 
-    server.run(transport=TRANSPORT)
+    if TRANSPORT == 'stdio':
+        server.run(
+            transport=TRANSPORT,
+        )
+    else:  # streamable-http or other HTTP transports
+        server.run(
+            transport=TRANSPORT,
+            host=HOST,
+            port=PORT,
+            stateless_http=STATELESS_HTTP,
+        )
 
 
 if __name__ == '__main__':

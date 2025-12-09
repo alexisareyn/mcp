@@ -494,10 +494,7 @@ Content here.
         result = extract_sections_from_markdown(
             markdown, ['Nonexistent Section', 'Another Missing']
         )
-        expected = (
-            '> **Note**: No sections found matching: "Nonexistent Section", "Another Missing". Returning full document content instead.\n\n'
-            + markdown
-        )
+        expected = '**Alert**: No matching sections were found: "Nonexistent Section", "Another Missing". Please use the read_documentation tool instead to get the full document content.'
         assert result == expected
 
     def test_partial_success(self):

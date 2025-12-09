@@ -242,7 +242,7 @@ def extract_sections_from_markdown(markdown_content: str, section_titles: List[s
 
         if not found_sections:
             section_list = ', '.join(f'"{title}"' for title in section_titles)
-            return f'> **Note**: No sections found matching: {section_list}. Returning full document content instead.\n\n{markdown_content}'
+            return f'**Alert**: No matching sections were found: {section_list}. Please use the read_documentation tool instead to get the full document content.'
 
         result_content = '\n'.join(result_lines)
 

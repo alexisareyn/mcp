@@ -169,9 +169,10 @@ async def test_read_sections_live_all_sections_fail():
         assert isinstance(result, str)
         assert len(result) > 0
 
-        assert 'No sections found matching:' in result
-        assert 'Returning full document content instead' in result
+        assert '**Alert**: No matching sections were found:' in result
+        assert 'Please use the read_documentation tool instead' in result
 
-        assert 'general purpose buckets naming rules' in result.lower()
+        # Should NOT contain the actual content since we're returning an error
+        assert 'general purpose buckets naming rules' not in result.lower()
 
         assert 'Error extracting sections:' not in result, 'Found error indicator in the result'

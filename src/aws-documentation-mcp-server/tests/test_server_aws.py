@@ -724,101 +724,106 @@ class TestSearchDocumentation:
         search_phrase = 'S3 bucket configuration'
         ctx = MockContext()
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            'queryId': 'test-query-sections',
-            'suggestions': [
-                {
-                    'textExcerptSuggestion': {
-                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html',
-                        'title': 'S3 Bucket Configuration Guide',
-                        'metadata': {
-                            'seo_abstract': 'Complete guide to configuring S3 buckets',
-                            'section_summaries': [
-                                {
-                                    'section_title': 'Bucket Naming Rules',
-                                    'section_summary': 'Rules and conventions for naming S3 buckets including character restrictions and uniqueness requirements',
-                                },
-                                {
-                                    'section_title': 'Access Control Settings',
-                                    'section_summary': 'Configure bucket-level permissions, ACLs, and bucket policies for security',
-                                },
-                                {
-                                    'section_title': 'Versioning Configuration',
-                                    'section_summary': 'Enable and manage object versioning to preserve multiple variants of objects',
-                                },
-                            ],
-                        },
-                    }
-                },
-                {
-                    'textExcerptSuggestion': {
-                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html',
-                        'title': 'S3 Basic Setup',
-                        'summary': 'Basic S3 setup instructions',
-                        'metadata': {
-                            # No sections for this result
-                        },
-                    }
-                },
-            ],
-        }
+        with patch('awslabs.aws_documentation_mcp_server.server_aws.SEARCH_MODE', 'SUMMARIES'):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                'queryId': 'test-query-sections',
+                'suggestions': [
+                    {
+                        'textExcerptSuggestion': {
+                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html',
+                            'title': 'S3 Bucket Configuration Guide',
+                            'metadata': {
+                                'seo_abstract': 'Complete guide to configuring S3 buckets',
+                                'section_summaries': [
+                                    {
+                                        'section_title': 'Bucket Naming Rules',
+                                        'section_summary': 'Rules and conventions for naming S3 buckets including character restrictions and uniqueness requirements',
+                                    },
+                                    {
+                                        'section_title': 'Access Control Settings',
+                                        'section_summary': 'Configure bucket-level permissions, ACLs, and bucket policies for security',
+                                    },
+                                    {
+                                        'section_title': 'Versioning Configuration',
+                                        'section_summary': 'Enable and manage object versioning to preserve multiple variants of objects',
+                                    },
+                                ],
+                            },
+                        }
+                    },
+                    {
+                        'textExcerptSuggestion': {
+                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html',
+                            'title': 'S3 Basic Setup',
+                            'summary': 'Basic S3 setup instructions',
+                            'metadata': {
+                                # No sections for this result
+                            },
+                        }
+                    },
+                ],
+            }
 
-        with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+            with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+                mock_post.return_value = mock_response
 
-            response = await search_documentation(
-                ctx, search_phrase=search_phrase, limit=10, product_types=None, guide_types=None
-            )
-            results = response.search_results
+                response = await search_documentation(
+                    ctx,
+                    search_phrase=search_phrase,
+                    limit=10,
+                    product_types=None,
+                    guide_types=None,
+                )
+                results = response.search_results
 
-            assert len(results) == 2
-            assert response.query_id == 'test-query-sections'
+                assert len(results) == 2
+                assert response.query_id == 'test-query-sections'
 
-            first_result = results[0]
-            assert first_result.rank_order == 1
-            assert (
-                first_result.url
-                == 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html'
-            )
-            assert first_result.title == 'S3 Bucket Configuration Guide'
-            assert first_result.context == 'Complete guide to configuring S3 buckets'
+                first_result = results[0]
+                assert first_result.rank_order == 1
+                assert (
+                    first_result.url
+                    == 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html'
+                )
+                assert first_result.title == 'S3 Bucket Configuration Guide'
+                assert first_result.context == 'Complete guide to configuring S3 buckets'
 
-            assert first_result.sections is not None
-            assert len(first_result.sections) == 3
+                assert first_result.sections is not None
+                assert len(first_result.sections) == 3
 
-            sections = first_result.sections
-            assert sections[0].section_title == 'Bucket Naming Rules'
-            assert (
-                sections[0].section_summary
-                == 'Rules and conventions for naming S3 buckets including character restrictions and uniqueness requirements'
-            )
+                sections = first_result.sections
+                assert sections[0].section_title == 'Bucket Naming Rules'
+                assert (
+                    sections[0].section_summary
+                    == 'Rules and conventions for naming S3 buckets including character restrictions and uniqueness requirements'
+                )
 
-            assert sections[1].section_title == 'Access Control Settings'
-            assert (
-                sections[1].section_summary
-                == 'Configure bucket-level permissions, ACLs, and bucket policies for security'
-            )
+                assert sections[1].section_title == 'Access Control Settings'
+                assert (
+                    sections[1].section_summary
+                    == 'Configure bucket-level permissions, ACLs, and bucket policies for security'
+                )
 
-            assert sections[2].section_title == 'Versioning Configuration'
-            assert (
-                sections[2].section_summary
-                == 'Enable and manage object versioning to preserve multiple variants of objects'
-            )
+                assert sections[2].section_title == 'Versioning Configuration'
+                assert (
+                    sections[2].section_summary
+                    == 'Enable and manage object versioning to preserve multiple variants of objects'
+                )
 
-            second_result = results[1]
-            assert second_result.rank_order == 2
-            assert (
-                second_result.url
-                == 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html'
-            )
-            assert second_result.title == 'S3 Basic Setup'
-            assert second_result.context == 'Basic S3 setup instructions'
+                second_result = results[1]
+                assert second_result.rank_order == 2
+                assert (
+                    second_result.url
+                    == 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html'
+                )
+                assert second_result.title == 'S3 Basic Setup'
+                assert second_result.context == 'Basic S3 setup instructions'
 
-            assert second_result.sections == []
+                assert second_result.sections == []
 
-            mock_post.assert_called_once()
+                mock_post.assert_called_once()
 
 
 class TestRecommend:

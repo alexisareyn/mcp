@@ -21,7 +21,7 @@ class SectionSummary(BaseModel):
     """Details for a section on an AWS documentation page."""
 
     section_title: str
-    section_summary: str
+    section_summary: Optional[str] = None
 
 
 class SearchResult(BaseModel):

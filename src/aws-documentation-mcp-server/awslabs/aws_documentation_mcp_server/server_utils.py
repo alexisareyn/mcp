@@ -15,6 +15,7 @@ import httpx
 import os
 from awslabs.aws_documentation_mcp_server.models import SearchResponse
 from awslabs.aws_documentation_mcp_server.util import (
+    estimate_tokens,
     extract_content_from_html,
     extract_sections_from_markdown,
     format_documentation_result,
@@ -94,6 +95,12 @@ async def read_documentation_impl(
 
     result = format_documentation_result(url_str, content, start_index, max_length)
 
+    result_tokens = estimate_tokens(result)
+    result_chars = len(result)
+    logger.debug(
+        f'read_documentation response tokens: {result_tokens} ({result_chars} chars) for URL: {url_str}'
+    )
+
     # Log if content was truncated
     if len(content) > start_index + max_length:
         logger.debug(
@@ -152,7 +159,7 @@ async def read_sections_impl(
     session_uuid: str,
 ) -> str:
     """The implementation of the read_sections tool."""
-    logger.info(f'Fetching sections {section_titles} from {url_str}')
+    logger.debug(f'Fetching sections {section_titles} from {url_str}')
 
     url_with_session = f'{url_str}?session={session_uuid}'
 
@@ -195,5 +202,11 @@ async def read_sections_impl(
     filtered_content = extract_sections_from_markdown(full_markdown, section_titles)
 
     result = f'AWS Documentation content from {url_str}:\n\n{filtered_content}'
+
+    result_tokens = estimate_tokens(result)
+    result_chars = len(result)
+    logger.debug(
+        f'read_sections response tokens: {result_tokens} ({result_chars} chars) for URL: {url_str}, sections: {section_titles}'
+    )
 
     return result

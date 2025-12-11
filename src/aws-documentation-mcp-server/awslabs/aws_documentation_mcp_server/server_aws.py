@@ -15,6 +15,7 @@
 
 import httpx
 import json
+import os
 import re
 import uuid
 
@@ -34,6 +35,7 @@ from awslabs.aws_documentation_mcp_server.server_utils import (
 
 # Import utility functions
 from awslabs.aws_documentation_mcp_server.util import (
+    estimate_tokens,
     parse_recommendation_results,
 )
 from loguru import logger
@@ -45,6 +47,15 @@ from typing import List, Optional
 SEARCH_API_URL = 'https://proxy.search.docs.aws.amazon.com/search'
 RECOMMENDATIONS_API_URL = 'https://contentrecs-api.docs.aws.amazon.com/v1/recommendations'
 SESSION_UUID = str(uuid.uuid4())
+
+SEARCH_MODE = os.getenv('AWS_DOCS_SEARCH_MODE', 'TOC').upper()
+VALID_MODES = {'SUMMARIES', 'TOC', 'STANDARD'}
+
+if SEARCH_MODE not in VALID_MODES:
+    logger.warning(f'Invalid AWS_DOCS_SEARCH_MODE: {SEARCH_MODE}. Defaulting to TOC')
+    SEARCH_MODE = 'TOC'
+
+logger.debug(f'AWS Documentation MCP Server running in {SEARCH_MODE} mode')
 
 
 # Dict for domain modifiers for search if search terms contain any of the terms
@@ -412,78 +423,128 @@ async def search_documentation(
                 title = text_suggestion.get('title', 'Unknown')
                 url = text_suggestion.get('link', '')
 
-                logger.debug(
-                    f'Processing sections for {title}: {url} with metadata fields: {metadata}'
-                )
-
-                if 'section_summaries' in metadata:
+                if SEARCH_MODE != 'STANDARD' and 'section_summaries' in metadata:
                     try:
                         sections_data = metadata['section_summaries']
                         if isinstance(sections_data, list):
-                            logger.debug(
-                                f'Found sections array for: {title}: {url}, length: {len(sections_data)}'
-                            )
                             for section_idx, section in enumerate(sections_data):
-                                logger.debug(
-                                    f'Processing section {section_idx} for {title}: {url}, {section}'
-                                )
                                 section_title = section.get('section_title')
                                 section_summary = section.get('section_summary')
-                                logger.debug(
-                                    f"Extracted title: '{section_title}', summary: '{section_summary}' for {title}: {url}"
-                                )
 
-                                if section_title and section_summary:
-                                    logger.debug(
-                                        f'Adding section to results for {title}: {url}, {section_title}'
-                                    )
-                                    section_summaries.append(
-                                        SectionSummary(
-                                            section_title=section_title,
-                                            section_summary=section_summary,
+                                if section_title:
+                                    if SEARCH_MODE == 'SUMMARIES':
+                                        if section_summary:
+                                            section_summaries.append(
+                                                SectionSummary(
+                                                    section_title=section_title,
+                                                    section_summary=section_summary,
+                                                )
+                                            )
+                                    elif SEARCH_MODE == 'TOC':
+                                        # Include only title, empty summary (Table of Contents mode)
+                                        section_summaries.append(
+                                            SectionSummary(
+                                                section_title=section_title,
+                                            )
                                         )
-                                    )
-                                else:
-                                    logger.debug(
-                                        f'Skipping section {section_idx} for {title}: {url} - missing title or summary'
-                                    )
                         else:
                             logger.debug(
-                                f'Sections data is not a list for {title}: {url}, type: {type(sections_data)}'
+                                f'Sections data is not a list for {title}: {url}, type: {type(sections_data)} (Mode: {SEARCH_MODE})'
                             )
 
                     except json.JSONDecodeError as e:
                         logger.debug(
-                            f'JSON decode error for {url} : {title}: {e} with Raw sections that failed to parse: {metadata["section_summaries"]}'
+                            f'JSON decode error for {url} : {title}: {e} with Raw sections that failed to parse: {metadata["section_summaries"]} (Mode: {SEARCH_MODE})'
                         )
                     except (TypeError, KeyError) as e:
-                        logger.debug(f'Type/Key error for {title}: {url}, {e}')
-                else:
-                    logger.debug(f'No section_summaries in metadata for {title}: {url}')
+                        logger.debug(
+                            f'Type/Key error for {title}: {url}, {e} (Mode: {SEARCH_MODE})'
+                        )
 
                 if section_summaries:
                     logger.info(
                         f'Found {len(section_summaries)} sections for {title}: {url}, {[s.section_title for s in section_summaries]}'
                     )
 
-                if not section_summaries:
-                    logger.debug(f'No sections found for {title}: {url}.')
-
-                results.append(
-                    SearchResult(
-                        rank_order=i + 1,
-                        url=text_suggestion.get('link', ''),
-                        title=text_suggestion.get('title', ''),
-                        context=context,
-                        sections=section_summaries,
-                    )
+                search_result = SearchResult(
+                    rank_order=i + 1,
+                    url=text_suggestion.get('link', ''),
+                    title=text_suggestion.get('title', ''),
+                    context=context,
+                    sections=section_summaries,
                 )
+
+                result_text = f'{search_result.title} {search_result.context or ""}'
+                section_summary_text = ''
+                if section_summaries:
+                    section_summary_text = ' '.join(
+                        [f'{s.section_title} {s.section_summary or ""}' for s in section_summaries]
+                    )
+                    result_text += f' {section_summary_text}'
+
+                results.append(search_result)
 
     logger.debug(f'Found {len(results)} search results for: {search_phrase}')
     logger.debug(f'Search query ID: {query_id}')
     final_search_response = SearchResponse(
         search_results=results, facets=facets if facets else None, query_id=query_id
     )
+
+    response_text_with_sections = ''
+    response_text_titles_only = ''
+    response_text_no_sections = ''
+
+    for result in results:
+        base_content = f'{result.title} {result.context or ""}'
+
+        if result.sections:
+            # Scenario 1: With both titles and summaries (current full implementation)
+            section_content_full = ' '.join(
+                [f'{s.section_title} {s.section_summary or ""}' for s in result.sections]
+            )
+            response_text_with_sections += f' {base_content} {section_content_full}'
+
+            # Scenario 2: With titles only
+            section_titles_only = ' '.join([s.section_title for s in result.sections])
+            response_text_titles_only += f' {base_content} {section_titles_only}'
+        else:
+            # For results without sections, add base content to all scenarios
+            response_text_with_sections += f' {base_content}'
+            response_text_titles_only += f' {base_content}'
+
+        # Scenario 3: No sections at all (existing search_documentation estimate)
+        response_text_no_sections += f' {base_content}'
+
+    # Log tokens based on current mode and available data
+    if SEARCH_MODE == 'SUMMARIES':
+        # In SUMMARIES mode, we have both titles and summaries
+        total_tokens = estimate_tokens(response_text_with_sections)
+        total_chars = len(response_text_with_sections)
+        tokens_no_sections = estimate_tokens(response_text_no_sections)
+        chars_no_sections = len(response_text_no_sections)
+        # In SUMMARIES mode, we can also calculate what TOC mode would have been
+        tokens_toc = estimate_tokens(response_text_titles_only)
+        chars_toc = len(response_text_titles_only)
+        logger.debug(
+            f'Search_documentation tokens (using SUMMARIES mode) - With sections: {total_tokens} ({total_chars} chars), TOC mode: {tokens_toc} ({chars_toc} chars), STANDARD mode: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
+        )
+    elif SEARCH_MODE == 'TOC':
+        # In TOC mode, we only have titles (no summaries)
+        total_tokens = estimate_tokens(response_text_titles_only)
+        total_chars = len(response_text_titles_only)
+        tokens_no_sections = estimate_tokens(response_text_no_sections)
+        chars_no_sections = len(response_text_no_sections)
+        logger.debug(
+            f'Search_documentation tokens (using TOC mode) - With section titles: {total_tokens} ({total_chars} chars), STANDARD mode: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
+        )
+    else:  # STANDARD mode
+        # In STANDARD mode, we have no sections
+        total_tokens = estimate_tokens(response_text_no_sections)
+        total_chars = len(response_text_no_sections)
+        logger.debug(
+            f'Search_documentation tokens (using STANDARD mode) - {total_tokens} ({total_chars} chars) for query: "{search_phrase}"'
+        )
+
     add_search_result_cache_item(final_search_response)
     return final_search_response
 

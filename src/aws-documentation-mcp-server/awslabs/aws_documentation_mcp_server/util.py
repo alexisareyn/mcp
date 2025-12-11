@@ -18,6 +18,23 @@ from awslabs.aws_documentation_mcp_server.models import RecommendationResult
 from typing import Any, Dict, List
 
 
+def estimate_tokens(text: str) -> int:
+    """Estimate token count based on character count.
+
+    Uses the approximation that 3-4 characters equals 1 token.
+    We'll use 3.5 characters per token as the conversion factor.
+
+    Args:
+        text: The text to estimate tokens for
+
+    Returns:
+        Estimated number of tokens
+    """
+    if not text:
+        return 0
+    return int(len(text) / 3.5)
+
+
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
 

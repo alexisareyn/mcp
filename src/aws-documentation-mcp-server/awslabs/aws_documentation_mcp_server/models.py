@@ -31,7 +31,7 @@ class SearchResult(BaseModel):
     url: str
     title: str
     context: Optional[str] = None
-    sections: Optional[list[SectionSummary]] = None
+    sections: Optional[List[str]] = None
 
 
 class SearchResponse(BaseModel):

@@ -24,7 +24,6 @@ from awslabs.aws_documentation_mcp_server.models import (
     RecommendationResult,
     SearchResponse,
     SearchResult,
-    SectionSummary,
 )
 from awslabs.aws_documentation_mcp_server.server_utils import (
     DEFAULT_USER_AGENT,
@@ -48,14 +47,7 @@ SEARCH_API_URL = 'https://proxy.beta.search.docs.aws.a2z.com/search'
 RECOMMENDATIONS_API_URL = 'https://contentrecs-api.docs.aws.amazon.com/v1/recommendations'
 SESSION_UUID = str(uuid.uuid4())
 
-SEARCH_MODE = os.getenv('AWS_DOCS_SEARCH_MODE', 'TOC').upper()
-VALID_MODES = {'SUMMARIES', 'TOC', 'STANDARD', 'MARKDOWN'}
-
-if SEARCH_MODE not in VALID_MODES:
-    logger.warning(f'Invalid AWS_DOCS_SEARCH_MODE: {SEARCH_MODE}. Defaulting to TOC')
-    SEARCH_MODE = 'TOC'
-
-logger.debug(f'AWS Documentation MCP Server running in {SEARCH_MODE} mode')
+logger.debug('AWS Documentation MCP Server running with simplified section support')
 
 
 # Dict for domain modifiers for search if search terms contain any of the terms
@@ -420,128 +412,47 @@ async def search_documentation(
                 elif 'suggestionBody' in text_suggestion:
                     context = text_suggestion['suggestionBody']
 
-                section_summaries = []
+                sections = []
                 title = text_suggestion.get('title', 'Unknown')
                 url = text_suggestion.get('link', '')
 
                 # Log metadata for debugging
                 logger.debug(f'Processing result {i + 1}: {title} - {url}')
                 logger.debug(f'Available metadata keys: {list(metadata.keys())}')
-                if 'markdown_sections' in metadata:
-                    logger.debug(f'Found markdown_sections: {metadata["markdown_sections"]}')
-                if 'section_summaries' in metadata:
-                    logger.debug(f'Found section_summaries: {metadata["section_summaries"]}')
 
-                # Handle section processing based on search mode
-                if SEARCH_MODE == 'MARKDOWN':
-                    logger.debug(f'Processing in MARKDOWN mode for {title}')
-                    # Process markdown_sections metadata field for MARKDOWN mode
-                    if 'markdown_sections' in metadata:
-                        try:
-                            markdown_sections_data = metadata['markdown_sections']
-                            logger.debug(
-                                f'Raw markdown_sections data: {markdown_sections_data}, type: {type(markdown_sections_data)}'
-                            )
-                            if isinstance(markdown_sections_data, list):
-                                logger.debug(
-                                    f'Processing {len(markdown_sections_data)} markdown sections'
-                                )
-                                for idx, section_data in enumerate(markdown_sections_data):
-                                    logger.debug(
-                                        f'Section {idx}: {section_data} (type: {type(section_data)})'
-                                    )
-
-                                    # Handle both string and dict formats
-                                    section_title = None
-                                    if isinstance(section_data, str):
-                                        # Simple string format
-                                        section_title = section_data
-                                    elif (
-                                        isinstance(section_data, dict)
-                                        and 'section_title' in section_data
-                                    ):
-                                        # Dict format with section_title key
-                                        section_title = section_data['section_title']
-
-                                    if section_title and isinstance(section_title, str):
-                                        section_summaries.append(
-                                            SectionSummary(
-                                                section_title=section_title,
-                                            )
-                                        )
-                                        logger.debug(f'Added section: {section_title}')
-                                    else:
-                                        logger.debug(f'Skipping invalid section: {section_data}')
-                            else:
-                                logger.warning(
-                                    f'Markdown sections data is not a list for {title}: {url}, type: {type(markdown_sections_data)}, value: {markdown_sections_data} (Mode: {SEARCH_MODE})'
-                                )
-                        except (TypeError, KeyError) as e:
-                            logger.error(
-                                f'Type/Key error processing markdown_sections for {title}: {url}, {e} (Mode: {SEARCH_MODE})'
-                            )
-                    else:
-                        logger.warning(
-                            f'No markdown_sections found in metadata for {title}: {url} (Mode: {SEARCH_MODE})'
-                        )
-                elif SEARCH_MODE != 'STANDARD' and 'section_summaries' in metadata:
+                if 'sections' in metadata:
                     try:
-                        sections_data = metadata['section_summaries']
+                        sections_data = metadata['sections']
+                        logger.debug(f'Found sections: {sections_data}')
+                        logger.debug(f'Raw sections data type: {type(sections_data)}')
+                        
                         if isinstance(sections_data, list):
-                            for section_idx, section in enumerate(sections_data):
-                                section_title = section.get('section_title')
-                                section_summary = section.get('section_summary')
+                            logger.debug(f'Processing {len(sections_data)} sections')
+                            for idx, section_data in enumerate(sections_data):
+                                logger.debug(f'Section {idx}: {section_data} (type: {type(section_data)})')
 
-                                if section_title:
-                                    if SEARCH_MODE == 'SUMMARIES':
-                                        if section_summary:
-                                            section_summaries.append(
-                                                SectionSummary(
-                                                    section_title=section_title,
-                                                    section_summary=section_summary,
-                                                )
-                                            )
-                                    elif SEARCH_MODE == 'TOC':
-                                        # Include only title, empty summary (Table of Contents mode)
-                                        section_summaries.append(
-                                            SectionSummary(
-                                                section_title=section_title,
-                                            )
-                                        )
+                                if isinstance(section_data, str) and section_data != "":
+                                    sections.append(section_data)
+                                    logger.debug(f'Added section: {section_data}')
+                                else:
+                                    logger.debug(f'Skipping invalid section (expected non-empty string): {section_data}')
                         else:
-                            logger.debug(
-                                f'Sections data is not a list for {title}: {url}, type: {type(sections_data)} (Mode: {SEARCH_MODE})'
-                            )
-
-                    except json.JSONDecodeError as e:
-                        logger.debug(
-                            f'JSON decode error for {url} : {title}: {e} with Raw sections that failed to parse: {metadata["section_summaries"]} (Mode: {SEARCH_MODE})'
-                        )
+                            logger.warning(f'Sections data is not a list for {title}: {url}, type: {type(sections_data)}, value: {sections_data}')
                     except (TypeError, KeyError) as e:
-                        logger.debug(
-                            f'Type/Key error for {title}: {url}, {e} (Mode: {SEARCH_MODE})'
-                        )
+                        logger.error(f'Error processing sections for {title}: {url}, {e}')
+                else:
+                    logger.debug(f'No sections found in metadata for {title}: {url}')
 
-                if section_summaries:
-                    logger.info(
-                        f'Found {len(section_summaries)} sections for {title}: {url}, {[s.section_title for s in section_summaries]}'
-                    )
+                if sections:
+                    logger.info(f'Found {len(sections)} sections for {title}: {url}, sections: {sections}')
 
                 search_result = SearchResult(
                     rank_order=i + 1,
                     url=text_suggestion.get('link', ''),
                     title=text_suggestion.get('title', ''),
                     context=context,
-                    sections=section_summaries,
+                    sections=sections if sections else None,
                 )
-
-                result_text = f'{search_result.title} {search_result.context or ""}'
-                section_summary_text = ''
-                if section_summaries:
-                    section_summary_text = ' '.join(
-                        [f'{s.section_title} {s.section_summary or ""}' for s in section_summaries]
-                    )
-                    result_text += f' {section_summary_text}'
 
                 results.append(search_result)
 
@@ -552,68 +463,26 @@ async def search_documentation(
     )
 
     response_text_with_sections = ''
-    response_text_titles_only = ''
     response_text_no_sections = ''
 
     for result in results:
         base_content = f'{result.title} {result.context or ""}'
-
         if result.sections:
-            # Scenario 1: With both titles and summaries (current full implementation)
-            section_content_full = ' '.join(
-                [f'{s.section_title} {s.section_summary or ""}' for s in result.sections]
-            )
-            response_text_with_sections += f' {base_content} {section_content_full}'
-
-            # Scenario 2: With titles only
-            section_titles_only = ' '.join([s.section_title for s in result.sections])
-            response_text_titles_only += f' {base_content} {section_titles_only}'
+            section_content = ' '.join(result.sections)
+            response_text_with_sections += f' {base_content} {section_content}'
         else:
-            # For results without sections, add base content to all scenarios
             response_text_with_sections += f' {base_content}'
-            response_text_titles_only += f' {base_content}'
-
-        # Scenario 3: No sections at all (existing search_documentation estimate)
+        
         response_text_no_sections += f' {base_content}'
 
-    # Log tokens based on current mode and available data
-    if SEARCH_MODE == 'SUMMARIES':
-        # In SUMMARIES mode, we have both titles and summaries
-        total_tokens = estimate_tokens(response_text_with_sections)
-        total_chars = len(response_text_with_sections)
-        tokens_no_sections = estimate_tokens(response_text_no_sections)
-        chars_no_sections = len(response_text_no_sections)
-        # In SUMMARIES mode, we can also calculate what TOC/MARKDOWN mode would have been
-        tokens_toc = estimate_tokens(response_text_titles_only)
-        chars_toc = len(response_text_titles_only)
-        logger.debug(
-            f'Search_documentation tokens (using SUMMARIES mode) - With sections: {total_tokens} ({total_chars} chars), TOC/MARKDOWN mode: {tokens_toc} ({chars_toc} chars), STANDARD mode: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
-        )
-    elif SEARCH_MODE == 'TOC':
-        # In TOC mode, we only have titles (no summaries)
-        total_tokens = estimate_tokens(response_text_titles_only)
-        total_chars = len(response_text_titles_only)
-        tokens_no_sections = estimate_tokens(response_text_no_sections)
-        chars_no_sections = len(response_text_no_sections)
-        logger.debug(
-            f'Search_documentation tokens (using TOC mode) - With section titles: {total_tokens} ({total_chars} chars), MARKDOWN mode: {total_tokens} ({total_chars} chars), STANDARD mode: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
-        )
-    elif SEARCH_MODE == 'MARKDOWN':
-        # In MARKDOWN mode, we only have titles (no summaries), same token count as TOC mode
-        total_tokens = estimate_tokens(response_text_titles_only)
-        total_chars = len(response_text_titles_only)
-        tokens_no_sections = estimate_tokens(response_text_no_sections)
-        chars_no_sections = len(response_text_no_sections)
-        logger.debug(
-            f'Search_documentation tokens (using MARKDOWN mode) - With section titles: {total_tokens} ({total_chars} chars), TOC mode: {total_tokens} ({total_chars} chars), STANDARD mode: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
-        )
-    else:  # STANDARD mode
-        # In STANDARD mode, we have no sections
-        total_tokens = estimate_tokens(response_text_no_sections)
-        total_chars = len(response_text_no_sections)
-        logger.debug(
-            f'Search_documentation tokens (using STANDARD mode) - {total_tokens} ({total_chars} chars) for query: "{search_phrase}"'
-        )
+    total_tokens = estimate_tokens(response_text_with_sections)
+    total_chars = len(response_text_with_sections)
+    tokens_no_sections = estimate_tokens(response_text_no_sections)
+    chars_no_sections = len(response_text_no_sections)
+    
+    logger.debug(
+        f'Search_documentation tokens - With sections: {total_tokens} ({total_chars} chars), Without sections: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
+    )
 
     add_search_result_cache_item(final_search_response)
     return final_search_response

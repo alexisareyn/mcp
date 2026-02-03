@@ -720,274 +720,151 @@ class TestSearchDocumentation:
 
     @pytest.mark.asyncio
     async def test_search_documentation_with_sections(self):
-        """Test searching AWS documentation with section summaries included in results."""
+        """Test searching AWS documentation with markdown sections included in results."""
         search_phrase = 'S3 bucket configuration'
         ctx = MockContext()
 
-        with patch('awslabs.aws_documentation_mcp_server.server_aws.SEARCH_MODE', 'SUMMARIES'):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                'queryId': 'test-query-sections',
-                'suggestions': [
-                    {
-                        'textExcerptSuggestion': {
-                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html',
-                            'title': 'S3 Bucket Configuration Guide',
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'queryId': 'test-query-sections',
+            'suggestions': [
+                {
+                    'textExcerptSuggestion': {
+                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html',
+                        'title': 'S3 Bucket Configuration Guide',
                             'metadata': {
                                 'seo_abstract': 'Complete guide to configuring S3 buckets',
-                                'section_summaries': [
-                                    {
-                                        'section_title': 'Bucket Naming Rules',
-                                        'section_summary': 'Rules and conventions for naming S3 buckets including character restrictions and uniqueness requirements',
-                                    },
-                                    {
-                                        'section_title': 'Access Control Settings',
-                                        'section_summary': 'Configure bucket-level permissions, ACLs, and bucket policies for security',
-                                    },
-                                    {
-                                        'section_title': 'Versioning Configuration',
-                                        'section_summary': 'Enable and manage object versioning to preserve multiple variants of objects',
-                                    },
+                                'sections': [
+                                    'Bucket Naming Rules',
+                                    'Access Control Settings', 
+                                    'Versioning Configuration',
                                 ],
                             },
-                        }
-                    },
-                    {
-                        'textExcerptSuggestion': {
-                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html',
-                            'title': 'S3 Basic Setup',
-                            'summary': 'Basic S3 setup instructions',
-                            'metadata': {
-                                # No sections for this result
-                            },
-                        }
-                    },
-                ],
-            }
+                    }
+                },
+                {
+                    'textExcerptSuggestion': {
+                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html',
+                        'title': 'S3 Basic Setup',
+                        'summary': 'Basic S3 setup instructions',
+                        'metadata': {
+                            # No markdown_sections for this result
+                        },
+                    }
+                },
+            ],
+        }
 
-            with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-                mock_post.return_value = mock_response
+        with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
 
-                response = await search_documentation(
-                    ctx,
-                    search_phrase=search_phrase,
-                    limit=10,
-                    product_types=None,
-                    guide_types=None,
-                )
-                results = response.search_results
+            response = await search_documentation(
+                ctx,
+                search_phrase=search_phrase,
+                limit=10,
+                product_types=None,
+                guide_types=None,
+            )
+            results = response.search_results
 
-                assert len(results) == 2
-                assert response.query_id == 'test-query-sections'
+            assert len(results) == 2
+            assert response.query_id == 'test-query-sections'
 
-                first_result = results[0]
-                assert first_result.rank_order == 1
-                assert (
-                    first_result.url
-                    == 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html'
-                )
-                assert first_result.title == 'S3 Bucket Configuration Guide'
-                assert first_result.context == 'Complete guide to configuring S3 buckets'
+            first_result = results[0]
+            assert first_result.rank_order == 1
+            assert (
+                first_result.url
+                == 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html'
+            )
+            assert first_result.title == 'S3 Bucket Configuration Guide'
+            assert first_result.context == 'Complete guide to configuring S3 buckets'
 
-                assert first_result.sections is not None
-                assert len(first_result.sections) == 3
+            # Simplified approach - sections is a list of strings
+            assert first_result.sections is not None
+            assert len(first_result.sections) == 3
+            assert first_result.sections == [
+                'Bucket Naming Rules',
+                'Access Control Settings', 
+                'Versioning Configuration'
+            ]
 
-                sections = first_result.sections
-                assert sections[0].section_title == 'Bucket Naming Rules'
-                assert (
-                    sections[0].section_summary
-                    == 'Rules and conventions for naming S3 buckets including character restrictions and uniqueness requirements'
-                )
+            second_result = results[1]
+            assert second_result.rank_order == 2
+            assert (
+                second_result.url
+                == 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html'
+            )
+            assert second_result.title == 'S3 Basic Setup'
+            assert second_result.context == 'Basic S3 setup instructions'
 
-                assert sections[1].section_title == 'Access Control Settings'
-                assert (
-                    sections[1].section_summary
-                    == 'Configure bucket-level permissions, ACLs, and bucket policies for security'
-                )
+            assert second_result.sections is None
 
-                assert sections[2].section_title == 'Versioning Configuration'
-                assert (
-                    sections[2].section_summary
-                    == 'Enable and manage object versioning to preserve multiple variants of objects'
-                )
-
-                second_result = results[1]
-                assert second_result.rank_order == 2
-                assert (
-                    second_result.url
-                    == 'https://docs.aws.amazon.com/s3/latest/userguide/basic-setup.html'
-                )
-                assert second_result.title == 'S3 Basic Setup'
-                assert second_result.context == 'Basic S3 setup instructions'
-
-                assert second_result.sections == []
-
-                mock_post.assert_called_once()
+            mock_post.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_search_documentation_with_markdown_sections(self):
-        """Test searching AWS documentation with markdown sections in MARKDOWN mode."""
-        search_phrase = 'S3 bucket setup'
-        ctx = MockContext()
-
-        with patch('awslabs.aws_documentation_mcp_server.server_aws.SEARCH_MODE', 'MARKDOWN'):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                'queryId': 'test-query-markdown',
-                'suggestions': [
-                    {
-                        'textExcerptSuggestion': {
-                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-setup.html',
-                            'title': 'S3 Bucket Setup Guide',
-                            'metadata': {
-                                'seo_abstract': 'Guide to setting up S3 buckets',
-                                'markdown_sections': [
-                                    'Getting Started',
-                                    'Creating Your First Bucket',
-                                    'Configuring Bucket Settings',
-                                    'Managing Access Permissions',
-                                    'Best Practices',
-                                ],
-                            },
-                        }
-                    },
-                    {
-                        'textExcerptSuggestion': {
-                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/troubleshooting.html',
-                            'title': 'S3 Troubleshooting',
-                            'summary': 'Common S3 troubleshooting steps',
-                            'metadata': {
-                                # No markdown_sections for this result
-                            },
-                        }
-                    },
-                ],
-            }
-
-            with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-                mock_post.return_value = mock_response
-
-                response = await search_documentation(
-                    ctx,
-                    search_phrase=search_phrase,
-                    limit=10,
-                    product_types=None,
-                    guide_types=None,
-                )
-                results = response.search_results
-
-                assert len(results) == 2
-                assert response.query_id == 'test-query-markdown'
-
-                first_result = results[0]
-                assert first_result.rank_order == 1
-                assert (
-                    first_result.url
-                    == 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-setup.html'
-                )
-                assert first_result.title == 'S3 Bucket Setup Guide'
-                assert first_result.context == 'Guide to setting up S3 buckets'
-
-                # Verify markdown sections are processed correctly
-                assert first_result.sections is not None
-                assert len(first_result.sections) == 5
-
-                sections = first_result.sections
-                assert sections[0].section_title == 'Getting Started'
-                assert sections[0].section_summary is None  # MARKDOWN mode has no summaries
-
-                assert sections[1].section_title == 'Creating Your First Bucket'
-                assert sections[1].section_summary is None
-
-                assert sections[2].section_title == 'Configuring Bucket Settings'
-                assert sections[2].section_summary is None
-
-                assert sections[3].section_title == 'Managing Access Permissions'
-                assert sections[3].section_summary is None
-
-                assert sections[4].section_title == 'Best Practices'
-                assert sections[4].section_summary is None
-
-                # Second result should have no sections
-                second_result = results[1]
-                assert second_result.rank_order == 2
-                assert (
-                    second_result.url
-                    == 'https://docs.aws.amazon.com/s3/latest/userguide/troubleshooting.html'
-                )
-                assert second_result.title == 'S3 Troubleshooting'
-                assert second_result.context == 'Common S3 troubleshooting steps'
-                assert second_result.sections == []
-
-                mock_post.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_search_documentation_markdown_sections_invalid_data(self):
-        """Test searching AWS documentation with invalid markdown sections data."""
+    async def test_search_documentation_with_sections_invalid_data(self):
+        """Test searching AWS documentation with invalid sections data."""
         search_phrase = 'S3 test'
         ctx = MockContext()
 
-        with patch('awslabs.aws_documentation_mcp_server.server_aws.SEARCH_MODE', 'MARKDOWN'):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                'queryId': 'test-query-invalid-markdown',
-                'suggestions': [
-                    {
-                        'textExcerptSuggestion': {
-                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/test.html',
-                            'title': 'S3 Test Guide',
-                            'metadata': {
-                                'seo_abstract': 'Test guide for S3',
-                                'markdown_sections': 'not_a_list',  # Invalid - should be a list
-                            },
-                        }
-                    },
-                    {
-                        'textExcerptSuggestion': {
-                            'link': 'https://docs.aws.amazon.com/s3/latest/userguide/test2.html',
-                            'title': 'S3 Test Guide 2',
-                            'metadata': {
-                                'seo_abstract': 'Test guide for S3',
-                                'markdown_sections': [
-                                    'Valid Section',
-                                    None,
-                                    '',
-                                    123,
-                                ],  # Mixed valid/invalid
-                            },
-                        }
-                    },
-                ],
-            }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'queryId': 'test-query-invalid-sections',
+            'suggestions': [
+                {
+                    'textExcerptSuggestion': {
+                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/test.html',
+                        'title': 'S3 Test Guide',
+                        'metadata': {
+                            'seo_abstract': 'Test guide for S3',
+                            'sections': 'not_a_list',  # Invalid - should be a list
+                        },
+                    }
+                },
+                {
+                    'textExcerptSuggestion': {
+                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/test2.html',
+                        'title': 'S3 Test Guide 2',
+                        'metadata': {
+                            'seo_abstract': 'Test guide for S3',
+                            'sections': [
+                                'Valid Section',
+                                None,
+                                '',
+                                123,
+                            ],  # Mixed valid/invalid
+                        },
+                    }
+                },
+            ],
+        }
 
-            with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-                mock_post.return_value = mock_response
+        with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
 
-                response = await search_documentation(
-                    ctx,
-                    search_phrase=search_phrase,
-                    limit=10,
-                    product_types=None,
-                    guide_types=None,
-                )
-                results = response.search_results
+            response = await search_documentation(
+                ctx,
+                search_phrase=search_phrase,
+                limit=10,
+                product_types=None,
+                guide_types=None,
+            )
+            results = response.search_results
 
-                assert len(results) == 2
+            assert len(results) == 2
 
-                # First result should have no sections due to invalid data type
-                first_result = results[0]
-                assert first_result.sections == []
+            # First result should have no sections due to invalid data type
+            first_result = results[0]
+            assert first_result.sections is None
 
-                # Second result should only have valid sections
-                second_result = results[1]
-                assert len(second_result.sections) == 1
-                assert second_result.sections[0].section_title == 'Valid Section'
-                assert second_result.sections[0].section_summary is None
+            # Second result should only have valid sections (strings only)
+            second_result = results[1]
+            assert len(second_result.sections) == 1
+            assert second_result.sections[0] == 'Valid Section'
 
-                mock_post.assert_called_once()
+            mock_post.assert_called_once()
 
 
 class TestRecommend:

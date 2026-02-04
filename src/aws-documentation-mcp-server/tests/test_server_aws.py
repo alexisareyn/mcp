@@ -733,14 +733,14 @@ class TestSearchDocumentation:
                     'textExcerptSuggestion': {
                         'link': 'https://docs.aws.amazon.com/s3/latest/userguide/bucket-configuration.html',
                         'title': 'S3 Bucket Configuration Guide',
-                            'metadata': {
-                                'seo_abstract': 'Complete guide to configuring S3 buckets',
-                                'sections': [
-                                    'Bucket Naming Rules',
-                                    'Access Control Settings', 
-                                    'Versioning Configuration',
-                                ],
-                            },
+                        'metadata': {
+                            'seo_abstract': 'Complete guide to configuring S3 buckets',
+                            'sections': [
+                                'Bucket Naming Rules',
+                                'Access Control Settings',
+                                'Versioning Configuration',
+                            ],
+                        },
                     }
                 },
                 {
@@ -785,8 +785,8 @@ class TestSearchDocumentation:
             assert len(first_result.sections) == 3
             assert first_result.sections == [
                 'Bucket Naming Rules',
-                'Access Control Settings', 
-                'Versioning Configuration'
+                'Access Control Settings',
+                'Versioning Configuration',
             ]
 
             second_result = results[1]

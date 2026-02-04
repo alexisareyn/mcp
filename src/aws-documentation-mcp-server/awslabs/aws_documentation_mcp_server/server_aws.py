@@ -15,7 +15,6 @@
 
 import httpx
 import json
-import os
 import re
 import uuid
 
@@ -70,7 +69,7 @@ mcp = FastMCP(
     ## Best Practices
 
     - For long documentation pages, make multiple calls to `read_documentation` with different `start_index` values for pagination
-    - If you do not need all of the information in a document, use `read_sections` to get the relevant content and save context space.
+    - By default, use read_sections when the answer could be within a specific section(s), given the table of contents. Otherwise, use read_documentation to scan the entire page.
     - For very long documents (>30,000 characters), stop reading if you've found the needed information
     - When searching, use specific technical terms rather than general phrases
     - Use `recommend` tool to discover related content that might not appear in search results
@@ -82,7 +81,7 @@ mcp = FastMCP(
 
     - Use `search_documentation` when: You need to find documentation about a specific AWS service or feature
     - Use `read_documentation` when: You have a specific documentation URL and need its content
-    - Use `read_sections` when: You have a specific documentation URL and specific section title(s) and only need content from those specific section(s)
+    - Use `read_sections` when: You have a specific documentation URL and specific section title(s) and want content from those specific section(s)
     - Use `recommend` when: You want to find related content to a documentation page you're already viewing or need to find newly released information
     - Use `recommend` as a fallback when: Multiple searches have not yielded the specific information needed
     """,
@@ -425,26 +424,34 @@ async def search_documentation(
                         sections_data = metadata['sections']
                         logger.debug(f'Found sections: {sections_data}')
                         logger.debug(f'Raw sections data type: {type(sections_data)}')
-                        
+
                         if isinstance(sections_data, list):
                             logger.debug(f'Processing {len(sections_data)} sections')
                             for idx, section_data in enumerate(sections_data):
-                                logger.debug(f'Section {idx}: {section_data} (type: {type(section_data)})')
+                                logger.debug(
+                                    f'Section {idx}: {section_data} (type: {type(section_data)})'
+                                )
 
-                                if isinstance(section_data, str) and section_data != "":
+                                if isinstance(section_data, str) and section_data != '':
                                     sections.append(section_data)
                                     logger.debug(f'Added section: {section_data}')
                                 else:
-                                    logger.debug(f'Skipping invalid section (expected non-empty string): {section_data}')
+                                    logger.debug(
+                                        f'Skipping invalid section (expected non-empty string): {section_data}'
+                                    )
                         else:
-                            logger.warning(f'Sections data is not a list for {title}: {url}, type: {type(sections_data)}, value: {sections_data}')
+                            logger.warning(
+                                f'Sections data is not a list for {title}: {url}, type: {type(sections_data)}, value: {sections_data}'
+                            )
                     except (TypeError, KeyError) as e:
                         logger.error(f'Error processing sections for {title}: {url}, {e}')
                 else:
                     logger.debug(f'No sections found in metadata for {title}: {url}')
 
                 if sections:
-                    logger.info(f'Found {len(sections)} sections for {title}: {url}, sections: {sections}')
+                    logger.info(
+                        f'Found {len(sections)} sections for {title}: {url}, sections: {sections}'
+                    )
 
                 search_result = SearchResult(
                     rank_order=i + 1,
@@ -472,14 +479,14 @@ async def search_documentation(
             response_text_with_sections += f' {base_content} {section_content}'
         else:
             response_text_with_sections += f' {base_content}'
-        
+
         response_text_no_sections += f' {base_content}'
 
     total_tokens = estimate_tokens(response_text_with_sections)
     total_chars = len(response_text_with_sections)
     tokens_no_sections = estimate_tokens(response_text_no_sections)
     chars_no_sections = len(response_text_no_sections)
-    
+
     logger.debug(
         f'Search_documentation tokens - With sections: {total_tokens} ({total_chars} chars), Without sections: {tokens_no_sections} ({chars_no_sections} chars) for query: "{search_phrase}"'
     )

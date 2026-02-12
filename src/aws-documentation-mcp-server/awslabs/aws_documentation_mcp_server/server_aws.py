@@ -42,7 +42,7 @@ from pydantic import Field
 from typing import List, Optional
 
 
-SEARCH_API_URL = 'https://proxy.beta.search.docs.aws.a2z.com/search'
+SEARCH_API_URL = 'https://proxy.search.docs.aws.com/search'
 RECOMMENDATIONS_API_URL = 'https://contentrecs-api.docs.aws.amazon.com/v1/recommendations'
 SESSION_UUID = str(uuid.uuid4())
 
@@ -391,7 +391,7 @@ async def search_documentation(
                 facets=None,
                 query_id='',
             )
-
+    
     results = []
     if 'suggestions' in data:
         for i, suggestion in enumerate(data['suggestions'][:limit]):

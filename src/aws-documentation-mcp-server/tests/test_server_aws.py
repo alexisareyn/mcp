@@ -514,9 +514,7 @@ class TestSearchDocumentation:
                 called_url = args[0]  # args is a tuple, first element is request URL
 
                 assert '?session=' in called_url
-                assert called_url.startswith(
-                    'https://proxy.search.docs.aws.amazon.com/search?session='
-                )
+                assert called_url.startswith('https://proxy.search.docs.aws.com/search?session=')
 
                 request_body = kwargs['json']
                 assert not any(
@@ -568,9 +566,7 @@ class TestSearchDocumentation:
                 called_url = args[0]  # args is a tuple, first element is request URL
 
                 assert '?session=' in called_url
-                assert called_url.startswith(
-                    'https://proxy.search.docs.aws.amazon.com/search?session='
-                )
+                assert called_url.startswith('https://proxy.search.docs.aws.com/search?session=')
 
                 request_body = kwargs['json']
                 assert any(
@@ -720,7 +716,7 @@ class TestSearchDocumentation:
 
     @pytest.mark.asyncio
     async def test_search_documentation_with_sections(self):
-        """Test searching AWS documentation with markdown sections included in results."""
+        """Test searching AWS documentation with section summaries included in results."""
         search_phrase = 'S3 bucket configuration'
         ctx = MockContext()
 
@@ -749,7 +745,7 @@ class TestSearchDocumentation:
                         'title': 'S3 Basic Setup',
                         'summary': 'Basic S3 setup instructions',
                         'metadata': {
-                            # No markdown_sections for this result
+                            # No sections for this result
                         },
                     }
                 },
@@ -759,19 +755,14 @@ class TestSearchDocumentation:
         with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
             mock_post.return_value = mock_response
 
-            response = await search_documentation(
-                ctx,
-                search_phrase=search_phrase,
-                limit=10,
-                product_types=None,
-                guide_types=None,
+            results = await search_documentation(
+                ctx, search_phrase=search_phrase, limit=10, product_types=None, guide_types=None
             )
-            results = response.search_results
 
-            assert len(results) == 2
-            assert response.query_id == 'test-query-sections'
+            assert len(results.search_results) == 2
+            assert results.query_id == 'test-query-sections'
 
-            first_result = results[0]
+            first_result = results.search_results[0]
             assert first_result.rank_order == 1
             assert (
                 first_result.url
@@ -780,7 +771,6 @@ class TestSearchDocumentation:
             assert first_result.title == 'S3 Bucket Configuration Guide'
             assert first_result.context == 'Complete guide to configuring S3 buckets'
 
-            # Simplified approach - sections is a list of strings
             assert first_result.sections is not None
             assert len(first_result.sections) == 3
             assert first_result.sections == [
@@ -789,7 +779,7 @@ class TestSearchDocumentation:
                 'Versioning Configuration',
             ]
 
-            second_result = results[1]
+            second_result = results.search_results[1]
             assert second_result.rank_order == 2
             assert (
                 second_result.url
@@ -799,70 +789,6 @@ class TestSearchDocumentation:
             assert second_result.context == 'Basic S3 setup instructions'
 
             assert second_result.sections is None
-
-            mock_post.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_search_documentation_with_sections_invalid_data(self):
-        """Test searching AWS documentation with invalid sections data."""
-        search_phrase = 'S3 test'
-        ctx = MockContext()
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            'queryId': 'test-query-invalid-sections',
-            'suggestions': [
-                {
-                    'textExcerptSuggestion': {
-                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/test.html',
-                        'title': 'S3 Test Guide',
-                        'metadata': {
-                            'seo_abstract': 'Test guide for S3',
-                            'sections': 'not_a_list',  # Invalid - should be a list
-                        },
-                    }
-                },
-                {
-                    'textExcerptSuggestion': {
-                        'link': 'https://docs.aws.amazon.com/s3/latest/userguide/test2.html',
-                        'title': 'S3 Test Guide 2',
-                        'metadata': {
-                            'seo_abstract': 'Test guide for S3',
-                            'sections': [
-                                'Valid Section',
-                                None,
-                                '',
-                                123,
-                            ],  # Mixed valid/invalid
-                        },
-                    }
-                },
-            ],
-        }
-
-        with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            response = await search_documentation(
-                ctx,
-                search_phrase=search_phrase,
-                limit=10,
-                product_types=None,
-                guide_types=None,
-            )
-            results = response.search_results
-
-            assert len(results) == 2
-
-            # First result should have no sections due to invalid data type
-            first_result = results[0]
-            assert first_result.sections is None
-
-            # Second result should only have valid sections (strings only)
-            second_result = results[1]
-            assert len(second_result.sections) == 1
-            assert second_result.sections[0] == 'Valid Section'
 
             mock_post.assert_called_once()
 

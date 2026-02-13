@@ -26,13 +26,13 @@ from awslabs.aws_healthomics_mcp_server.utils.aws_utils import (
     encode_to_base64,
     get_account_id,
     get_aws_session,
+    get_codeconnections_client,
     get_logs_client,
     get_omics_client,
     get_omics_endpoint_url,
     get_omics_service_name,
     get_partition,
     get_region,
-    get_ssm_client,
 )
 from unittest.mock import MagicMock, patch
 
@@ -415,27 +415,27 @@ class TestGetLogsClient:
             get_logs_client()
 
 
-class TestGetSsmClient:
-    """Test cases for get_ssm_client function."""
+class TestGetCodeconnectionsClient:
+    """Test cases for get_codeconnections_client function."""
 
     @patch('awslabs.aws_healthomics_mcp_server.utils.aws_utils.create_aws_client')
-    def test_get_ssm_client_success(self, mock_create_client):
-        """Test successful SSM client creation."""
+    def test_get_codeconnections_client_success(self, mock_create_client):
+        """Test successful CodeConnections client creation."""
         mock_client = MagicMock()
         mock_create_client.return_value = mock_client
 
-        result = get_ssm_client()
+        result = get_codeconnections_client()
 
-        mock_create_client.assert_called_once_with('ssm')
+        mock_create_client.assert_called_once_with('codeconnections')
         assert result == mock_client
 
     @patch('awslabs.aws_healthomics_mcp_server.utils.aws_utils.create_aws_client')
-    def test_get_ssm_client_failure(self, mock_create_client):
-        """Test SSM client creation failure."""
-        mock_create_client.side_effect = Exception('SSM access denied')
+    def test_get_codeconnections_client_failure(self, mock_create_client):
+        """Test CodeConnections client creation failure."""
+        mock_create_client.side_effect = Exception('CodeConnections service unavailable')
 
-        with pytest.raises(Exception, match='SSM access denied'):
-            get_ssm_client()
+        with pytest.raises(Exception, match='CodeConnections service unavailable'):
+            get_codeconnections_client()
 
 
 class TestUtilityFunctions:
@@ -535,11 +535,10 @@ class TestRegionResolution:
         # Test each client function
         get_omics_client()
         get_logs_client()
-        get_ssm_client()
         create_aws_client('s3')
 
         # Verify all calls used no region parameter (centralized)
-        expected_calls = [(), (), (), ()]  # All calls should have no arguments
+        expected_calls = [(), (), ()]  # All calls should have no arguments
         actual_calls = [call.args for call in mock_get_session.call_args_list]
         assert actual_calls == expected_calls
 
@@ -555,11 +554,10 @@ class TestRegionResolution:
         # Test each client function
         get_omics_client()
         get_logs_client()
-        get_ssm_client()
         create_aws_client('dynamodb')
 
         # Verify all calls used no region parameter (centralized)
-        expected_calls = [(), (), (), ()]  # All calls should have no arguments
+        expected_calls = [(), (), ()]  # All calls should have no arguments
         actual_calls = [call.args for call in mock_get_session.call_args_list]
         assert actual_calls == expected_calls
 

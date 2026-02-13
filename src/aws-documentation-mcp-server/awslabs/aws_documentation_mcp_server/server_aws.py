@@ -33,6 +33,7 @@ from awslabs.aws_documentation_mcp_server.server_utils import (
 
 # Import utility functions
 from awslabs.aws_documentation_mcp_server.util import (
+    add_search_intent_to_search_request,
     estimate_tokens,
     parse_recommendation_results,
 )
@@ -45,8 +46,6 @@ from typing import List, Optional
 SEARCH_API_URL = 'https://proxy.search.docs.aws.com/search'
 RECOMMENDATIONS_API_URL = 'https://contentrecs-api.docs.aws.amazon.com/v1/recommendations'
 SESSION_UUID = str(uuid.uuid4())
-
-logger.debug('AWS Documentation MCP Server running with simplified section support')
 
 
 # Dict for domain modifiers for search if search terms contain any of the terms
@@ -243,6 +242,10 @@ async def read_sections(
 async def search_documentation(
     ctx: Context,
     search_phrase: str = Field(description='Search phrase to use'),
+    search_intent: str = Field(
+        description='For the search_phrase parameter, describe the search intent of the user. CRITICAL: Do not include any PII or customer data, describe only the AWS-related intent for search.',
+        default='',
+    ),
     limit: int = Field(
         default=10,
         description='Maximum number of results to return',
@@ -293,6 +296,7 @@ async def search_documentation(
     Args:
         ctx: MCP context for logging and error handling
         search_phrase: Search phrase to use
+        search_intent: The intent behind the search requested by the user
         limit: Maximum number of results to return
         product_types: Filter by AWS product/service
         guide_types: Filter by guide type
@@ -327,6 +331,9 @@ async def search_documentation(
             )
 
     search_url_with_session = f'{SEARCH_API_URL}?session={SESSION_UUID}'
+    search_url_with_session = add_search_intent_to_search_request(
+        search_url_with_session, search_intent
+    )
 
     async with httpx.AsyncClient() as client:
         try:
@@ -391,7 +398,7 @@ async def search_documentation(
                 facets=None,
                 query_id='',
             )
-    
+
     results = []
     if 'suggestions' in data:
         for i, suggestion in enumerate(data['suggestions'][:limit]):

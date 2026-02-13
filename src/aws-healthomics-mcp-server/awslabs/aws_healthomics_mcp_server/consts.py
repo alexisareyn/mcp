@@ -32,7 +32,7 @@ except ValueError:
     DEFAULT_MAX_RESULTS = 100
 
 # Supported regions (as of June 2025)
-# These are hardcoded as a fallback in case the SSM parameter store query fails
+# These are hardcoded as a fallback in case the boto3 session region query fails
 HEALTHOMICS_SUPPORTED_REGIONS = [
     'ap-southeast-1',
     'eu-central-1',
@@ -43,6 +43,18 @@ HEALTHOMICS_SUPPORTED_REGIONS = [
     'us-west-2',
 ]
 
+
+# ECR Constants
+HEALTHOMICS_PRINCIPAL = 'omics.amazonaws.com'
+ECR_REQUIRED_REGISTRY_ACTIONS = ['ecr:CreateRepository', 'ecr:BatchImportUpstreamImage']
+ECR_REQUIRED_REPOSITORY_ACTIONS = ['ecr:BatchGetImage', 'ecr:GetDownloadUrlForLayer']
+
+# Default ECR repository prefixes
+DEFAULT_ECR_PREFIXES = {
+    'docker-hub': 'docker-hub',
+    'quay': 'quay',
+    'ecr-public': 'ecr-public',
+}
 
 # Storage types
 STORAGE_TYPE_STATIC = 'STATIC'

@@ -17,13 +17,6 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional
 
 
-class SectionSummary(BaseModel):
-    """Details for a section on an AWS documentation page."""
-
-    section_title: str
-    section_summary: Optional[str] = None
-
-
 class SearchResult(BaseModel):
     """Search result from AWS documentation search."""
 

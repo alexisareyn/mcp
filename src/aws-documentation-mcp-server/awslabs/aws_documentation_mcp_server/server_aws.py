@@ -187,10 +187,22 @@ async def read_sections(
     - Must be from the docs.aws.amazon.com domain
     - Must end with .html
 
-    ## Section Matching
+    ## Read Sections Tips
 
-    - Section titles are matched case-insensitively
-    - Leading and trailing whitespace is ignored
+    - Use exact section titles from search results 'sections' field when available
+    - Section matching is case-insensitive and handles whitespace differences
+    - Include multiple related sections in one call for comprehensive coverage
+    - Query-to-section mapping examples:
+        - "How to configure S3 encryption?" → sections: ["Server-side encryption", "Encryption configuration"]
+        - "Lambda timeout limits" → sections: ["Function configuration", "Timeout", "Limits"]
+        - "DynamoDB pricing information" → sections: ["Pricing", "Cost optimization", "Billing"]
+        - "API Gateway authentication methods" → sections: ["Authentication", "Authorization", "Security"]
+        - "RDS backup procedures" → sections: ["Backup", "Point-in-time recovery", "Automated backups"]
+        - "EC2 instance troubleshooting" → sections: ["Troubleshooting", "Common issues", "Instance status"]
+        - "CloudFormation best practices" → sections: ["Best practices", "Recommendations", "Security"]
+
+    ## Effective Section Selection
+
     - When a section is found, all content until the next same-level or higher-level heading is included
     - Subsections within matching sections are automatically included
 
@@ -203,9 +215,23 @@ async def read_sections(
     ## Example Usage
 
     ```
+    # If query is about S3 bucket naming rules:
+    # Available sections: ['General purpose buckets naming rules', 'Example general purpose bucket names', 'Best practices', 'Creating a bucket that uses a GUID in the bucket name']
+    # Read these specific sections:
     read_sections(
         url='https://docs.aws.amazon.com/s3/latest/userguide/bucketnamingrules.html',
-        section_titles=['Rules for bucket naming', 'Examples of valid bucket names'],
+        section_titles=['General purpose buckets naming rules', 'Best practices'],
+    )
+
+    # If query is about Python Lambda function examples:
+    # Available sections: ['Example Python Lambda function code', 'Handler naming conventions', 'Using the Lambda event object', 'Accessing and using the Lambda context object'. 'Valid handler signatures for Python handlers', 'Returning a value', 'Using the AWS SDK for Python (Boto3) in your handler', 'Accessing environment variables, 'Code best practices for Python Lambda functions']
+    # Read these specific sections:
+    read_sections(
+        url='https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html',
+        section_titles=[
+            'Example Python Lambda function code',
+            'Code best practices for Python Lambda functions',
+        ],
     )
     ```
 
@@ -289,6 +315,7 @@ async def search_documentation(
         - url: The documentation page URL
         - title: The page title
         - context: A brief excerpt or summary (if available)
+        - sections: Table of contents (when available) - these section titles can be used with the read_sections tool for targeted content extraction
     - facets: Available filters (product_types, guide_types) for refining searches
     - query_id: Unique identifier for this search session
 

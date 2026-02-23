@@ -189,11 +189,21 @@ async def read_sections_impl(
 
     if is_html_content(page_raw, content_type):
         full_markdown = extract_content_from_html(page_raw)
+
+        if full_markdown == '<e>Page failed to be simplified from HTML</e>':
+            error_msg = 'Could not parse HTML page content. Please use the read_documentation tool instead to get the full document content.'
+            logger.error(error_msg)
+            await ctx.error(error_msg)
+            return error_msg
     else:
-        full_markdown = page_raw
+        return 'Cannot extract sections from non-HTML content. Please use the read_documentation tool instead to get the full document content.'
 
     filtered_content = extract_sections_from_markdown(full_markdown, section_titles)
 
-    result = f'AWS Documentation content from {url_str}:\n\n{filtered_content}'
+    if filtered_content.startswith(
+        '**Alert**: No matching sections were found:'
+    ) or filtered_content.startswith('**Alert**: This document does not contain subsections.'):
+        return filtered_content
 
+    result = f'AWS Documentation content from {url_str}:\n\n{filtered_content}'
     return result

@@ -279,8 +279,7 @@ This is the main content.
 
                     result = await read_sections(ctx, url=url, section_titles=section_titles)
 
-                    expected_result = f'AWS Documentation content from {url}:\n\n{error_result}'
-                    assert result == expected_result
+                    assert result == error_result
                     mock_extract_sections.assert_called_once_with(full_markdown, section_titles)
 
     @pytest.mark.asyncio
@@ -351,6 +350,42 @@ Content here.
 
         with pytest.raises(ValueError, match='section_titles parameter cannot be empty'):
             await read_sections(ctx, url=url, section_titles=section_titles)
+
+    @pytest.mark.asyncio
+    async def test_read_sections_whitespace_normalization(self):
+        """Test whitespace normalization fix for BUG-001."""
+        url = 'https://docs.aws.amazon.com/test.html'
+        section_titles = [' Best  practices \n']  # Extra spaces and newline
+        ctx = MockContext()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = (
+            '<html><body><h1>Best practices</h1><p>Content here.</p></body></html>'
+        )
+        mock_response.headers = {'content-type': 'text/html'}
+
+        full_markdown = '# Best practices\nContent here.'
+        filtered_markdown = '# Best practices\nContent here.\n\n'
+
+        with patch('httpx.AsyncClient.get', new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_response
+            with patch(
+                'awslabs.aws_documentation_mcp_server.server_utils.extract_content_from_html'
+            ) as mock_extract:
+                mock_extract.return_value = full_markdown
+                with patch(
+                    'awslabs.aws_documentation_mcp_server.server_utils.extract_sections_from_markdown'
+                ) as mock_extract_sections:
+                    mock_extract_sections.return_value = filtered_markdown
+
+                    result = await read_sections(ctx, url=url, section_titles=section_titles)
+
+                    expected_result = (
+                        f'AWS Documentation content from {url}:\n\n{filtered_markdown}'
+                    )
+                    assert result == expected_result
+                    mock_extract_sections.assert_called_once_with(full_markdown, section_titles)
 
     @pytest.mark.asyncio
     async def test_read_sections_end_to_end_workflow(self):

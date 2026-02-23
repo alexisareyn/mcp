@@ -225,12 +225,15 @@ def extract_sections_from_markdown(markdown_content: str, section_titles: List[s
     try:
         lines = markdown_content.split('\n')
         result_lines = []
-        found_sections = []
-        missing_sections = []
+        found_sections = set()
+        available_level2_sections = []
         current_section_level = 0
         capturing = False
 
-        normalized_titles = {title.strip().lower(): title.strip() for title in section_titles}
+        normalized_titles = {}
+        for title in section_titles:
+            normalized_key = ' '.join(title.strip().lower().split())
+            normalized_titles[normalized_key] = title.strip()
 
         for line in lines:
             if line.strip().startswith('#'):
@@ -238,32 +241,37 @@ def extract_sections_from_markdown(markdown_content: str, section_titles: List[s
                 heading_level = len(heading_match) - len(heading_match.lstrip('#'))
                 heading_text = heading_match.lstrip('#').strip()
 
-                if heading_text.lower() in normalized_titles:
+                if heading_level == 2 and heading_text not in available_level2_sections:
+                    available_level2_sections.append(heading_text)
+
+                normalized_heading = ' '.join(heading_text.lower().split())
+
+                if normalized_heading in normalized_titles:
                     current_section_level = heading_level
                     capturing = True
                     result_lines.append(line)
-
-                    original_title = normalized_titles[heading_text.lower()]
-                    if original_title not in found_sections:
-                        found_sections.append(original_title)
-
+                    found_sections.add(normalized_titles[normalized_heading])
                 elif capturing and heading_level <= current_section_level:
+                    # End of current section
                     capturing = False
                 elif capturing:
+                    # Continue capturing content within section
                     result_lines.append(line)
             elif capturing:
                 result_lines.append(line)
-
-        for title in section_titles:
-            if title.strip() not in found_sections:
-                missing_sections.append(title.strip())
-
         if not found_sections:
             section_list = ', '.join(f'"{title}"' for title in section_titles)
-            return f'**Alert**: No matching sections were found: {section_list}. Please use the read_documentation tool instead to get the full document content.'
+            if available_level2_sections:
+                available_list = ', '.join(f'"{section}"' for section in available_level2_sections)
+                return f'**Alert**: No matching sections were found: {section_list}. Available sections: {available_list}. Please retry with one or more of these sections or use the read_documentation tool instead to get the full document content.'
+            else:
+                return '**Alert**: This document does not contain subsections. Please use the read_documentation tool instead to get the full document content.'
 
         result_content = '\n'.join(result_lines)
 
+        missing_sections = [
+            title.strip() for title in section_titles if title.strip() not in found_sections
+        ]
         if missing_sections:
             missing_list = ', '.join(f'"{title}"' for title in missing_sections)
             result_content += (

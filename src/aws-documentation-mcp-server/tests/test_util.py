@@ -625,12 +625,29 @@ This is the end.
 
     def test_whitespace_handling(self):
         """Test section titles with leading/trailing whitespace."""
-        markdown = """# Main Section
-                    Content here.
-                    """
-        result = extract_sections_from_markdown(markdown, ['  Main Section  '])
-        assert '# Main Section' in result
-        assert 'Content here.' in result
+        markdown = """# Best practices
+This is content for best practices.
+
+# Another Section
+More content here.
+"""
+        test_cases = [
+            ' Best practices\n',
+            '  Best practices  ',
+            'Best  practices',
+            '\tBest practices\t',
+            'Best\npractices',
+        ]
+
+        for test_input in test_cases:
+            result = extract_sections_from_markdown(markdown, [test_input])
+            assert '# Best practices' in result, f"Failed to match '{repr(test_input)}'"
+            assert 'This is content for best practices.' in result, (
+                f"Content missing for '{repr(test_input)}'"
+            )
+            assert '# Another Section' not in result, (
+                f"Should not include other sections for '{repr(test_input)}'"
+            )
 
     def test_nested_sections_included(self):
         """Test that subsections within matching sections are included."""
@@ -672,8 +689,7 @@ Content here.
         result = extract_sections_from_markdown(
             markdown, ['Nonexistent Section', 'Another Missing']
         )
-        expected = '**Alert**: No matching sections were found: "Nonexistent Section", "Another Missing". Please use the read_documentation tool instead to get the full document content.'
-        assert result == expected
+        assert result.startswith('**Alert**: This document does not contain subsections.')
 
     def test_partial_success(self):
         """Test when some sections found, others missing (graceful failure)."""

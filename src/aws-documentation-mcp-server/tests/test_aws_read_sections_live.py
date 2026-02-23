@@ -148,6 +148,29 @@ async def test_read_sections_live_case_insensitive():
 
 @pytest.mark.asyncio
 @pytest.mark.live
+async def test_read_sections_live_whitespace_normalization():
+    """Whitespace normalization with real documentation."""
+    url = 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html'
+    # Test with extra whitespace that should still match "General purpose buckets naming rules"
+    section_titles = ['  General   purpose buckets naming rules  \n']
+    ctx = MockContext()
+
+    with patch(
+        'awslabs.aws_documentation_mcp_server.server_aws.DEFAULT_USER_AGENT',
+        TEST_USER_AGENT,
+    ):
+        result = await read_sections_global(ctx, url=url, section_titles=section_titles)
+
+        assert result is not None
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+        assert 'general purpose buckets naming rules' in result.lower()
+        assert 'Error extracting sections:' not in result, 'Found error indicator in the result'
+
+
+@pytest.mark.asyncio
+@pytest.mark.live
 async def test_read_sections_live_all_sections_fail():
     """Test that when all sections fail to match, full markdown is returned."""
     url = 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html'
